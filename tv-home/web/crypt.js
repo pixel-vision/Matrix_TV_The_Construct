@@ -1380,8 +1380,10 @@
   // the way the Govee app does; on a light that ignores it, sync has to be switched on in the app.
   var gv = { ips: [], last: "", at: 0, breath: null, pending: null };
   function gOn() { return gv.ips.length > 0 && window.TVGOVEE; }
-  function gSend(cmd, data) {
-    if (!gOn()) return;
+  function jacked() { try { return localStorage.getItem("crypt.jack") === "1"; } catch (x) { return !!gv.hold; } }
+  function jackSet(on) { gv.hold = on; try { if (on) localStorage.setItem("crypt.jack", "1"); else localStorage.removeItem("crypt.jack"); } catch (x) {} }
+  function gSend(cmd, data, force) {
+    if (!gOn() || (jacked() && !force)) return;   // jacked in: the lights stay as they were set (the screensaver too)
     var j = JSON.stringify({ msg: { cmd: cmd, data: data } });
     gv.ips.forEach(function (ip) { try { window.TVGOVEE.send(ip, j); } catch (e) {} });
   }
@@ -2046,10 +2048,10 @@
         pr.forEach(function (x) { items.push(["n", x.t.slice(0, 24) + " S" + ("0" + x.s).slice(-2) + "  " + daysTo(x.at).toLowerCase()]); });
       }
       var hh = (window.COUCH_CONFIG || {}).home || {};
-      if (window.smartHome && window.smartHome.available && window.smartHome.available() || hh.jack_in) {
+      if (window.smartHome && window.smartHome.available && window.smartHome.available() || hh.jack_in || gOn()) {
         items.push(["h", "HARDLINE (HOME)"]);
-        if (hh.jack_in) items.push(["jack", "jack in  (movie mode)", 0]);
-        if (hh.jack_out) items.push(["jack", "jack out", 1]);
+        if (hh.jack_in || gOn()) items.push(["jack", "jack in  (movie mode)" + (jacked() ? "  [active]" : ""), 0]);
+        if (hh.jack_out || gOn()) items.push(["jack", "jack out", 1]);
         climate.forEach(function (c) { items.push(["n", (c.name || c.entity).slice(0, 18) + "  " + (c.current != null ? Math.round(c.current) + "°" : "?") + "  " + (c.state || "").toUpperCase() + (c.state !== "off" && c.target != null ? " TO " + c.target + "°" : "")]); });
       }
       items.push(["h", "TRIVIA"]);
@@ -2788,9 +2790,23 @@
   }
   function jackIn(out) {
     var h = (window.COUCH_CONFIG || {}).home || {}, ent = out ? h.jack_out : h.jack_in, sh = window.smartHome;
-    if (!ent || !sh || !sh.ask) return command("no hardline to home assistant.", true);
+    if (!ent && !gOn()) return command("no lights on the hardline.", true);
     command(out ? "jacking out ..." : "jacking in ...", true);
     if (!out) { burstUntil = Date.now() + 1500; gFlash(); }
+    if (gOn()) {   // the Govee lights on the LAN: a low green glow, held until jack out
+      clearInterval(gv.breath); gv.breath = null;
+      if (!out) {
+        setTimeout(function () {
+          jackSet(true);
+          gSend("colorwc", { color: { r: 0, g: 140, b: 30 }, colorTemInKelvin: 0 }, true);
+          setTimeout(function () { gSend("brightness", { value: 6 }, true); }, 250);
+        }, 900);
+      } else { jackSet(false); gv.last = ""; gSync(); }
+    }
+    if (!ent || !sh || !sh.ask) {
+      cmdHold = Date.now() + 6000;
+      return setTimeout(function () { command(out ? "unplugged. lights restored." : "you're in. lights down.", true); }, 1200);
+    }
     sh.ask("scene", ent).then(function (r) {
       cmdHold = Date.now() + 6000;
       command(r && r.ok ? (out ? "unplugged. lights restored." : "you're in. lights down.") : "the hardline didn't answer.", true);
