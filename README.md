@@ -119,7 +119,13 @@ the big hits.
 
 Make a profile called **Operator** and the home screen gives it a console: load any fight as a
 program, set off any event or moment on cue, play the finale, run the screensaver, or leave a
-message that turns up for the other person on their next visit.
+message that turns up for the other person on their next visit. Each section opens and closes
+with OK. It also has:
+
+- **Mission log:** your recent app sessions and Trakt episodes. Open one to read the episode's summary.
+- **Trivia:** one Matrix question a day, with a streak.
+- **Hacker mode:** every button press pours out more code until you're in.
+- **Hardline (home):** with Home Assistant, the aircon readings and **jack in** (movie mode) / **jack out**.
 
 ![The operator console](docs/matrix/console.jpg)
 
@@ -179,9 +185,27 @@ The Construct can tell you on the TV when a new episode of a show you watch has 
 
 To switch it on, make your own free app at [trakt.tv/oauth/applications](https://trakt.tv/oauth/applications) (sign-in type: device code), put its Client ID in `config.json` as `"home": { "trakt": { "client_id": "..." } }`, update the TV, then open the **operator console** and choose **link trakt account**. A new episode turns up as an incoming transmission in the clock window, once per episode, and the console can check by hand or unlink.
 
+With Trakt linked you also get:
+
+- **Up next:** a NEXT tag on the Keep watching cards, and your next episodes in the clock window.
+- **Season premieres:** new seasons of your shows, counted down in the clock window.
+- **The Oracle:** from the console, she picks something from your watchlist.
+- **Weekly report:** every Monday, last week's time in the Matrix.
+- **Crew chatter:** what the people you follow on Trakt start or are watching right now.
+
 It only reads your shows, watch progress, watchlist and calendar. It never changes anything on your Trakt account, and your data stays on your TV. See the [privacy policy](PRIVACY.md).
 
 > Show and episode data is provided by [Trakt](https://trakt.tv). The Construct uses the Trakt API but is not endorsed or certified by Trakt.
+
+## Everyday extras
+
+- **Film quotes** on the command line every few minutes.
+- **Weather warnings** for rain, storms, heat and strong wind in the next few hours.
+- **Bedtime:** at 11pm Sunday to Thursday, the operator tells you to get some sleep.
+- **Shutdown timer:** the TV turns itself off after 3 hours without a button press (`home.shutdown_hours`, 0 to leave the TV's own setting), counted down on the home and the screensaver.
+- **Doorbell** (Home Assistant): an agent-style alert on the home, on top of the door picture.
+
+For the smart home parts, see the `home_assistant` section in [docs/CONFIG.md](docs/CONFIG.md); `home.jack_in` and `home.jack_out` name the scenes or scripts (they must also be in `home_assistant.scenes`).
 
 ## Credits
 

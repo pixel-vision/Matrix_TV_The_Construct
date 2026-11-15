@@ -61,6 +61,14 @@ def main():
         os.remove(saverf)
         print("screensaver: the TV's own one is back")
 
+    # the TV's own "turn off after inactivity", as it was before the shutdown timer
+    shutf = os.path.join(TVS, name + ".shutdown")
+    if os.path.isfile(shutf):
+        v = open(shutf).read().strip()
+        tv("shell", "settings delete secure attentive_timeout" if v in ("", "null") else "settings put secure attentive_timeout " + v, check=False)
+        os.remove(shutf)
+        print("shutdown timer: the TV's own setting is back")
+
     tv("shell", "appops set app.couchtv.launcher SYSTEM_ALERT_WINDOW default", check=False)
     tv("shell", "pm revoke app.couchtv.launcher android.permission.WRITE_SECURE_SETTINGS", check=False)
     cur = tv("shell", "settings get secure enabled_accessibility_services", check=False).strip()

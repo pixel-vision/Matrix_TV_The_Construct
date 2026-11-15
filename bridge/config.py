@@ -258,6 +258,13 @@ def _home(h):
     mo = [m for m in mo if m in ("vase", "bricks", "code", "phone", "sentinels", "agentface", "reddress", "rabbit", "cat")]
     if mo:
         out["crypt_moments"] = mo
+    # The Crypt look: the TV turns itself off after this many hours without a button press (0 = never),
+    # and the Home Assistant scenes the operator console's "jack in" and "jack out" run
+    if isinstance(h.get("shutdown_hours"), int) and not isinstance(h.get("shutdown_hours"), bool) and 0 <= h["shutdown_hours"] <= 24:
+        out["shutdown_hours"] = h["shutdown_hours"]
+    for k in ("jack_in", "jack_out"):
+        if isinstance(h.get(k), str) and re.fullmatch(r"(scene|script)\.[a-z0-9_]{1,64}", h[k]):
+            out[k] = h[k]
     # Trakt new episode notices (README): only the app's Client ID, which is not a secret
     tk = h.get("trakt") if isinstance(h.get("trakt"), dict) else {}
     cid = str(tk.get("client_id") or "").strip()

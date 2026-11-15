@@ -568,3 +568,15 @@ html.crypt-mirror .time { color: #e6eef6; text-shadow: 0 0 0.6rem rgba(220, 235,
 .crypt-next { display: inline-block; margin-left: 1.25rem; font-size: 1.375rem; letter-spacing: 0.14em; color: #00ff41; opacity: 0.85; text-shadow: 0 0 0.5rem rgba(0, 255, 65, 0.5); }
 html.crypt-red .crypt-next { color: #ff2a2a; text-shadow: 0 0 0.5rem rgba(255, 42, 42, 0.5); }
 .crypt-console .ch.cs { opacity: 1; }
+
+/* the shutdown timer: the TV turns itself off after hours without a button press */
+.crypt-shut { position: fixed; top: 2.6rem; right: 9.5rem; z-index: 6; font-family: var(--c-term); font-size: 1.5rem; letter-spacing: 0.16em; color: var(--c-green); opacity: 0.45; pointer-events: none; }
+.crypt-shut.near { opacity: 1; color: #ff2a3c; text-shadow: 0 0 0.6rem rgba(255, 42, 60, 0.7); animation: crypt-eyes 1.4s steps(1) infinite; }
+html.saver .crypt-shut, html.crypt-progon .crypt-shut { display: none; }
+/* the doorbell: an agent-style alert, in alarm red */
+.crypt-door { color: #ffe0e3; }
+/* hacker mode */
+.crypt-hack { position: fixed; inset: 0; z-index: 70; background: rgba(0, 6, 2, 0.94); display: none; flex-direction: column; padding: 3rem 4rem; font-family: var(--c-term); color: var(--c-green); }
+.crypt-hack.on { display: flex; }
+.crypt-hack .hbar { font-size: 1.75rem; letter-spacing: 0.16em; padding-bottom: 1rem; border-bottom: 0.125rem solid currentColor; opacity: 0.8; }
+.crypt-hack .hbody { flex: 1; margin: 1rem 0 0; overflow: hidden; font-size: 1.75rem; line-height: 2.25rem; white-space: pre-wrap; text-shadow: 0 0 0.5rem rgba(0, 255, 65, 0.45); }

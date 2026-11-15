@@ -119,6 +119,21 @@ def main():
         tv("shell", "settings put secure screensaver_activate_on_sleep 1")   # a TV starts its screensaver when it "sleeps"; 0 sends it to standby instead
         print("     screensaver: Crypt (the TV's own one is kept in %s for undo)" % os.path.relpath(saverf, ROOT))
 
+    # The shutdown timer (home.shutdown_hours, 3 unless set; 0 leaves the TV's own setting): Android's
+    # "turn off after inactivity", which counts from the last button press, even with the screensaver on.
+    try:
+        hrs = json.loads(subprocess.run([PY, os.path.join(HERE, "home-config.py"), "--json"], capture_output=True, text=True).stdout)["home"].get("shutdown_hours", 3)
+    except Exception:
+        hrs = 3
+    if os.environ.get("SCREENSAVER") != "crypt":
+        hrs = None
+    if isinstance(hrs, int) and not isinstance(hrs, bool) and 0 < hrs <= 24:
+        shutf = os.path.join(TVS, name + ".shutdown")
+        if not os.path.isfile(shutf):
+            open(shutf, "w").write(tv("shell", "settings get secure attentive_timeout", check=False, quiet=True).strip())
+        tv("shell", "settings put secure attentive_timeout %d" % (hrs * 3600000), check=False)
+        print("     shutdown timer: the TV turns off after %d hour%s without a button press" % (hrs, "" if hrs == 1 else "s"))
+
     # Fire TV: the Home button watch (see apply.sh)
     if "package:com.amazon.tv.launcher" in tv("shell", "pm list packages com.amazon.tv.launcher"):
         fire = "app.couchtv.launcher/.FireWatch"

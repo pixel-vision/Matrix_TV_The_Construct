@@ -288,7 +288,7 @@
   }
 
   window.smartHome = {
-    available: available, open: open, close: close, move: move, ok: ok, paint: paint, reply: reply,
+    available: available, open: open, close: close, move: move, ok: ok, paint: paint, reply: reply, ask: ask,
     isOpen: function () { return S.open; }, icon: ICONS.home
   };
 })();

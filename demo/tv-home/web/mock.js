@@ -89,7 +89,7 @@
   // the demo: a linked Trakt account with sample data, so Up next and the mission log show
   cfg.home.trakt = { client_id: "demo-only-no-real-account" };
   try {
-    if (!localStorage.getItem("crypt.trakt")) {
+    if (!localStorage.getItem("crypt.trakt.prem")) {
       var now = Date.now();
       localStorage.setItem("crypt.trakt", JSON.stringify({ access_token: "demo", refresh_token: "demo", expires: 9e15 }));
       localStorage.setItem("crypt.trakt.next", JSON.stringify([{ t: "Slow Horses", e: "S04E04", n: "" }, { t: "Colin from Accounts", e: "S02E07", n: "" },
@@ -97,6 +97,7 @@
       localStorage.setItem("crypt.trakt.hist", JSON.stringify([
         { at: now - 26 * 3600e3, t: "Slow Horses", e: "S04E03", et: "", id: 1, o: "A sample summary for the demo: the team at Slough House chase a lead across London while Lamb plays his own game. On the TV this is the real episode summary from Trakt." },
         { at: now - 50 * 3600e3, t: "Severance", e: "S02E07", et: "", id: 2, o: "A sample summary for the demo: the innies push further into the floor and learn something they were never meant to find. On the TV this is the real episode summary from Trakt." }]));
+      localStorage.setItem("crypt.trakt.prem", JSON.stringify([{ t: "Severance", s: 3, at: now + 12 * 864e5 }, { t: "The Bear", s: 5, at: now + 33 * 864e5 }, { t: "Slow Horses", s: 6, at: now + 47 * 864e5 }]));
       localStorage.setItem("crypt.watched", JSON.stringify([{ a: "NETFLIX", at: now - 5 * 3600e3, m: 74, w: "Neo" }, { a: "BINGE", at: now - 28 * 3600e3, m: 41, w: "Neo" }]));
     }
   } catch (x) {}

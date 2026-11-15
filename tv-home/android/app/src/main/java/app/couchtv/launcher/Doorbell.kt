@@ -136,7 +136,11 @@ object Doorbell {
         }
     }
 
+    /** The home page's own alert (the Crypt look), set by MainActivity while it is running. */
+    @Volatile var onRing: (() -> Unit)? = null
+
     private fun ring(c: Context, bell: HomeAssistant.Bell) {
+        try { onRing?.invoke() } catch (e: Exception) {}
         main.removeCallbacks(timeUp)
         main.postDelayed(timeUp, RING_MS)
         if (card == null) show(c, bell)

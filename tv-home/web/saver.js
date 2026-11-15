@@ -140,7 +140,18 @@
   var corners = [["6rem", null, null, "5rem"], [null, "6rem", null, "5rem"], [null, "6rem", "5rem", null], ["6rem", null, "5rem", null]], ci = 0;
   function idle() {
     var s = Math.floor((Date.now() - started) / 1000);
-    $("corner").textContent = "> SYSTEM IDLE " + pad(Math.floor(s / 3600)) + ":" + pad(Math.floor(s / 60) % 60) + ":" + pad(s % 60);
+    var t = "> SYSTEM IDLE " + pad(Math.floor(s / 3600)) + ":" + pad(Math.floor(s / 60) % 60) + ":" + pad(s % 60);
+    // the shutdown timer (home.shutdown_hours, 3 by default): the TV turns off that long after the last
+    // button press. The screensaver starts after about 10 idle minutes, so the press was at least that long ago.
+    var hrs = home.shutdown_hours === 0 ? 0 : home.shutdown_hours || 3;
+    if (hrs) {
+      var last = started - 10 * 60000;
+      try { last = Math.max(last, +localStorage.getItem("crypt.active") || 0); } catch (x) {}
+      last = Math.min(last, started);
+      var l = Math.max(0, Math.floor((last + hrs * 3600000 - Date.now()) / 1000));
+      t += "\n> AUTO SHUTDOWN " + pad(Math.floor(l / 3600)) + ":" + pad(Math.floor(l / 60) % 60) + ":" + pad(l % 60);
+    }
+    $("corner").textContent = t;
   }
   function moveCorner() {
     var c = corners[ci++ % corners.length], st = $("corner").style;

@@ -701,8 +701,11 @@
       if (!broken) wakeHome();
     }
   }
+  var activeAt = 0;
   function secret(e) {
     lastKeyAt = Date.now();
+    if (lastKeyAt - activeAt > 15000) { activeAt = lastKeyAt; activeNow(); }   // for the shutdown countdown
+    if (hackOn()) { e.preventDefault(); e.stopImmediatePropagation(); hackKey(e.key); return; }
     if (empKey) { e.preventDefault(); e.stopImmediatePropagation(); empKey(e.key); return; }   // the EMP waits for the OK
     if (momentKey && !swallow) { var mk = momentKey; if (mk(e.key)) { e.preventDefault(); e.stopImmediatePropagation(); return; } }
     if (hrun) { e.preventDefault(); e.stopImmediatePropagation(); runKey(e.key); return; }
@@ -1046,6 +1049,9 @@
         row("WEATHER", weatherMode + " MODE"),
         row("TODAY", apps + " APPS / " + agentsToday + " AGENTS")
       ];
+      climate.slice(0, 3).forEach(function (c) {   // the aircon, from Home Assistant
+        right.push(row(String(c.name || "AC").toUpperCase().slice(0, 8), (c.current != null ? Math.round(c.current) + "°" : "?") + " " + (c.state === "off" ? "OFF" : String(c.action || c.state || "").toUpperCase())));
+      });
       return '<div class="phead">&gt; SYSTEM ' + (redPill ? '<i class="pbad">INTEGRITY ' + (40 + ((Math.random() * 30) | 0)) + "%</i>" : "INTEGRITY 100%") +
         '</div><div class="pcols"><pre class="psys">' + left.join("\n") + '</pre><pre class="psys">' + right.join("\n") + "</pre></div>";
     }
@@ -1058,6 +1064,13 @@
         row("CREW", people + " ABOARD"),
         row("SENTINELS", (near >= 10 ? '<i class="pbad">' : "") + near + " IN RANGE" + (near >= 10 ? " !!</i>" : ""))];
       return '<div class="phead">&gt; SHIP STATUS // OPERATOR ONLINE</div><pre class="psys">' + rows.join("\n") + "</pre>";
+    }
+    if (which === "prem") {
+      var pl = premList().slice(0, 6), pw = Math.min(22, Math.max.apply(null, pl.map(function (x) { return x.t.length; }).concat([4])));
+      return '<div class="phead">&gt; INCOMING // SEASON PREMIERES</div><pre class="psys">' + pl.map(function (x) {
+        var t = (x.t.length > pw ? x.t.slice(0, pw - 1) + "~" : x.t) + " S" + ("0" + x.s).slice(-2);
+        return "  " + esc(t) + " " + new Array(Math.max(2, pw + 8 - t.length)).join(".") + " " + daysTo(x.at);
+      }).join("\n") + "</pre>";
     }
     if (which === "next") {
       var nx = (tkGet("crypt.trakt.next") || []).slice(0, 6);
@@ -1094,6 +1107,7 @@
       panelAt++;
       var t = opMode ? ["time", "ship", "feed"] : turn.slice();   // the operator: the ship and the raw feed
       if (tkCfg() && (tkGet("crypt.trakt.next") || []).length) t.push("next");   // your shows' next episodes
+      if (tkCfg() && premList().length) t.push("prem");                           // new seasons, counted down
       panelSet(t[panelAt % t.length]);
     }, /[?&]panels=fast/.test(location.search) ? 3000 : 20000);
   }
@@ -2012,7 +2026,13 @@
       items.push(["train", "hardline training" + (best ? "   record " + best.toFixed(1) + "s" : "")]);
       if (tkCfg()) {
         items.push(["h", "TRAKT"]);
-        if (tkGet()) { items.push(["tk", "check for new episodes", "check"]); items.push(["tk", "unlink trakt", "unlink"]); }
+        if (tkGet()) {
+          items.push(["tk", "ask the oracle", "oracle"]);
+          items.push(["tk", "check for new episodes", "check"]);
+          items.push(["tk", "crew chatter (friends)", "friends"]);
+          items.push(["tk", "weekly report", "weekly"]);
+          items.push(["tk", "unlink trakt", "unlink"]);
+        }
         else items.push(["tk", "link trakt account ...", "link"]);
       }
       var tkn = tkGet("crypt.trakt.next") || [];
@@ -2020,6 +2040,24 @@
         items.push(["h", "UP NEXT"]);
         tkn.forEach(function (x) { items.push(["n", x.t.slice(0, 26) + "  " + x.e]); });
       }
+      var pr = premList();
+      if (pr.length) {
+        items.push(["h", "PREMIERES"]);
+        pr.forEach(function (x) { items.push(["n", x.t.slice(0, 24) + " S" + ("0" + x.s).slice(-2) + "  " + daysTo(x.at).toLowerCase()]); });
+      }
+      var hh = (window.COUCH_CONFIG || {}).home || {};
+      if (window.smartHome && window.smartHome.available && window.smartHome.available() || hh.jack_in) {
+        items.push(["h", "HARDLINE (HOME)"]);
+        if (hh.jack_in) items.push(["jack", "jack in  (movie mode)", 0]);
+        if (hh.jack_out) items.push(["jack", "jack out", 1]);
+        climate.forEach(function (c) { items.push(["n", (c.name || c.entity).slice(0, 18) + "  " + (c.current != null ? Math.round(c.current) + "°" : "?") + "  " + (c.state || "").toUpperCase() + (c.state !== "off" && c.target != null ? " TO " + c.target + "°" : "")]); });
+      }
+      items.push(["h", "TRIVIA"]);
+      var tv = triviaToday(), ts = triviaState();
+      items.push(["n", "streak " + (ts.day === new Date().toDateString() || ts.last === new Date(Date.now() - 864e5).toDateString() ? ts.streak : 0) + "   best " + (ts.best || 0)]);
+      items.push(["trivia", ts.day === new Date().toDateString() ? "today's question (answered)" : "today's question ...", 0]);
+      items.push(["h", "HACKER MODE"]);
+      items.push(["hack", "hack the mainframe", 0]);
       items.push(["h", "MISSION LOG"]);
       var ml = [], day = function (t) { var d = new Date(t); return ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"][d.getDay()] + " " + ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2); };
       try { JSON.parse(localStorage.getItem("crypt.watched") || "[]").forEach(function (x) { ml.push([x.at, day(x.at) + "  " + x.a + ".EXE  " + hm(x.m) + (x.w ? "  " + String(x.w).toUpperCase() : ""), { app: x }]); }); } catch (x) {}
@@ -2030,6 +2068,17 @@
       conLog.forEach(function (x, i) { items.push(["log", conEsc(x[1]), i]); });
       items.push(["h", "MESSAGES"]);
       items.push(["msgs", "leave a message for " + who().toLowerCase() + " ..."]);
+    } else if (conMode === "trivia") {
+      var tq = triviaToday(), st = triviaState(), done = st.day === new Date().toDateString();
+      items.push(["h", "TRIVIA // " + new Date().toDateString().toUpperCase()]);
+      items.push(["n", tq.q]);
+      items.push(["n", " "]);
+      tq.opts.forEach(function (o, i) {
+        if (done) items.push(["n", (i === tq.right ? "[*] " : i === st.pick ? "[x] " : "[ ] ") + o]);
+        else items.push(["ans", String.fromCharCode(65 + i) + ". " + conEsc(o), i]);
+      });
+      if (done) { items.push(["n", " "]); items.push(["n", st.lastOk ? "correct. streak " + st.streak + "." : "not this time. back tomorrow."]); }
+      items.push(["back", "< back"]);
     } else if (conMode === "ep") {   // one line of the mission log, opened
       var d = conDetail || {}, wrap = function (t, w) {
         var out = [], line = "";
@@ -2090,7 +2139,7 @@
     if (sel.indexOf(conAt) < 0) conAt = sel[0];
     var body = items.map(function (it, i) {
       if (it[0] === "h" && conMode === "main") return conLine((i === conAt ? "&gt; " : "&nbsp; ") + (conOpen[it[1]] ? "[-] " : "[+] ") + it[1], "ch" + (i === conAt ? " cs" : ""));
-      return it[0] === "h" ? conLine("// " + it[1], "ch") : it[0] === "n" ? conLine(String(it[1]).replace(/[&<>]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]; }).replace(/ /g, "&nbsp;").replace(/^/, conMode === "main" ? "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" : ""), "cn") : conLine((i === conAt ? "&gt; " : "&nbsp; ") + it[1], i === conAt ? "cs" : "");
+      return it[0] === "h" ? conLine("// " + it[1], "ch") : it[0] === "n" ? conLine(String(it[1]).replace(/[&<>]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]; }).replace(/ /g, "&nbsp;").replace(/^/, conMode === "main" ? "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" : ""), "cn") : conLine((conMode === "main" ? "&nbsp;&nbsp;&nbsp;&nbsp;" : "") + (i === conAt ? "&gt; " : "&nbsp; ") + it[1], i === conAt ? "cs" : "");
     }).join("");
     conEl.innerHTML = '<div class="cbar">OPERATOR CONSOLE // NEB-III</div><div class="cwrap"><div class="cbody">' + body +
       '</div><div class="ctrack"><div class="cthumb"></div></div></div><div class="cfoot">↑↓ choose &nbsp; OK run &nbsp; BACK close</div>';
@@ -2123,7 +2172,7 @@
     if (k === "ArrowDown") { conAt = sel[Math.min(sel.length - 1, at + 1)]; click(); return consoleBuild(); }
     if (k === "ArrowUp") { conAt = sel[Math.max(0, at - 1)]; click(); return consoleBuild(); }
     if (k === "Escape" || k === "Backspace" || k === "GoBack" || k === "BrowserBack") {
-      if (conMode !== "main") { conAt = conMode === "ep" ? conBackAt : 0; conMode = "main"; return consoleBuild(); }
+      if (conMode !== "main") { conAt = conMode === "ep" || conMode === "trivia" ? conBackAt : 0; conMode = "main"; return consoleBuild(); }
       return consoleClose();
     }
     if (k !== "Enter" && k !== " ") return;
@@ -2131,7 +2180,9 @@
     if (it[0] === "h") { conOpen[it[1]] = !conOpen[it[1]]; click(); return consoleBuild(); }   // the heading stays picked
     if (it[0] === "msgs") { conMode = "msgs"; conAt = 0; return consoleBuild(); }
     if (it[0] === "help") { conMode = "help"; conAt = 0; return consoleBuild(); }
-    if (it[0] === "back") { conAt = conMode === "ep" ? conBackAt : 0; conMode = "main"; return consoleBuild(); }
+    if (it[0] === "back") { conAt = conMode === "ep" || conMode === "trivia" ? conBackAt : 0; conMode = "main"; return consoleBuild(); }
+    if (it[0] === "trivia") { conBackAt = conAt; conMode = "trivia"; conAt = 0; click(); return consoleBuild(); }
+    if (it[0] === "ans") { triviaAnswer(it[2]); conAt = 0; return consoleBuild(); }
     if (it[0] === "log") { conDetail = conLog[it[2]][2]; conBackAt = conAt; conMode = "ep"; conAt = 0; click(); consoleBuild(); return logSummary(conDetail); }
     if (it[0] === "msg") {
       try { localStorage.setItem("crypt.msg", MESSAGES[it[2]]); } catch (x) {}
@@ -2142,7 +2193,11 @@
     if (it[0] === "prog") return loadProgram(it[2]);
     if (it[0] === "fin") return loadFinal(it[2]);
     if (it[0] === "mo") return setTimeout(function () { tryMoment(it[2], 6); }, 500);
-    if (it[0] === "tk") return setTimeout(function () { it[2] === "link" ? traktLink() : it[2] === "unlink" ? traktUnlink() : traktCheck(true); }, 400);
+    if (it[0] === "tk") return setTimeout(function () {
+      ({ link: traktLink, unlink: traktUnlink, oracle: oracle, friends: function () { friends(true); }, weekly: function () { weekly(true); } }[it[2]] || function () { traktCheck(true); })();
+    }, 400);
+    if (it[0] === "jack") return setTimeout(function () { jackIn(it[2] === 1); }, 300);
+    if (it[0] === "hack") return setTimeout(hackOpen, 300);
     if (it[0] === "train") { lastKeyAt = Date.now(); return setTimeout(function () { hardlineRun(true); }, 400); }
     var e = it[2];
     setTimeout(function () {
@@ -2467,6 +2522,263 @@
     cmdHold = Date.now() + 9000;
   }
 
+  // ================= more transmissions: the oracle, premieres, the weekly report, friends =================
+  function tkJSON(path) { return tkReq(path, null, true).then(function (r) { if (r.status === 204) return null; if (!r.ok) throw "trakt " + r.status; return r.json(); }); }
+  // a transmission in the clock window that waits its turn
+  function tellPanel(head, lines, cmd, ms) {
+    if (panelLock || gone() || root.classList.contains("saver")) return setTimeout(function () { tellPanel(head, lines, cmd, ms); }, 60e3);
+    tkPanel(head, lines);
+    cmdHold = Date.now() + (ms || 15000);
+    if (cmd) command(cmd, true);
+    logPush("TRANSMISSION RECEIVED ... " + head.split("//").pop().trim());
+    setEdge(tint, true); setTimeout(function () { setEdge(tint, false); }, 400);
+    setTimeout(tkPanelEnd, ms || 15000);
+  }
+  // the oracle: something from your Trakt watchlist (or Trakt's picks for you), and a word of advice
+  var ORACLE = ["don't worry about the vase.", "you've already made the choice. now you have to understand it.",
+    "make a believer out of you.", "being the one is just like being in love.", "take a cookie. by the time you're done, you'll feel right as rain.",
+    "you didn't come here to make the choice. you've already made it.", "know thyself."];
+  function oracle() {
+    if (!tkCfg() || !tkGet()) return command("the oracle needs a trakt link.", true);
+    command("visiting the oracle ...", true);
+    tkFresh().then(function () { return tkJSON("/sync/watchlist?limit=100"); }).then(function (list) {
+      list = (list || []).filter(function (x) { return x.show || x.movie; });
+      if (list.length) return list;
+      return tkJSON("/recommendations/shows?limit=20").then(function (r) { return (r || []).map(function (s) { return { show: s }; }); });
+    }).then(function (list) {
+      if (!list || !list.length) return command("the oracle sees nothing. add something to your trakt watchlist.", true);
+      var x = list[(Math.random() * list.length) | 0], it = x.show || x.movie, t = it.title + (it.year ? " (" + it.year + ")" : "");
+      var say = ORACLE[(Math.random() * ORACLE.length) | 0];
+      tellPanel("THE ORACLE // KITCHEN", ["you're going to watch", t + ".", "", "and " + say, "", "via trakt watchlist"],
+        "the oracle has spoken: " + it.title.toLowerCase(), 16000);
+    }).catch(function (e) { console.log("crypt: oracle " + e); command("the oracle is busy. try again later.", true); });
+  }
+  // premieres: new seasons of your shows in the next two months, counted down in the clock window
+  function premieres() {
+    if (!tkCfg() || !tkGet() || gone()) return;
+    var a = new Date(), b = new Date(Date.now() + 33 * 864e5);
+    tkFresh().then(function () {
+      return Promise.all([tkJSON("/calendars/my/shows/premieres/" + tkDay(a) + "/33"), tkJSON("/calendars/my/shows/premieres/" + tkDay(b) + "/33")]);
+    }).then(function (r) {
+      var seen = {}, out = [];
+      (r[0] || []).concat(r[1] || []).forEach(function (c) {
+        if (!c.show || !c.episode || seen[c.show.ids.trakt + "." + c.episode.season]) return;
+        seen[c.show.ids.trakt + "." + c.episode.season] = 1;
+        out.push({ t: c.show.title, s: c.episode.season, at: Date.parse(c.first_aired) });
+      });
+      out.sort(function (x, y) { return x.at - y.at; });
+      tkPut(out.slice(0, 8), "crypt.trakt.prem");
+    }).catch(function (e) { console.log("crypt: premieres " + e); });
+  }
+  function premList() { return (tkGet("crypt.trakt.prem") || []).filter(function (p) { return p.at > Date.now() - 864e5; }); }
+  function daysTo(t) { var d = Math.ceil((t - Date.now()) / 864e5); return d <= 0 ? "TODAY" : d === 1 ? "1 DAY" : d + " DAYS"; }
+  // the weekly report: on Monday, last week's viewing from Trakt
+  function weekStart(d) { var x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; }
+  function weekly(byHand) {
+    if (!tkCfg() || !tkGet()) { if (byHand) command("trakt not linked.", true); return; }
+    var end = weekStart(new Date()), start = new Date(end - 7 * 864e5), key = tkDay(end);
+    if (!byHand && (tkGet("crypt.week") === key || gone())) return;
+    tkFresh().then(function () {
+      return tkJSON("/sync/history?extended=full&limit=500&start_at=" + start.toISOString() + "&end_at=" + end.toISOString());
+    }).then(function (h) {
+      h = h || [];
+      var mins = 0, eps = 0, films = 0, by = {};
+      h.forEach(function (x) {
+        if (x.episode) { eps++; mins += x.episode.runtime || (x.show && x.show.runtime) || 30; by[x.show.title] = (by[x.show.title] || 0) + 1; }
+        else if (x.movie) { films++; mins += x.movie.runtime || 110; }
+      });
+      var top = Object.keys(by).sort(function (a, b) { return by[b] - by[a]; })[0];
+      tkPut(key, "crypt.week");
+      var lines = ["TIME IN THE MATRIX ... " + hm(mins), "EPISODES ............ " + eps, "FILMS ............... " + films];
+      if (top) lines.push("MOST WATCHED ........ " + top.slice(0, 22));
+      lines.push("", eps + films ? "the operator is impressed." : "a quiet week. the agents noticed.");
+      tellPanel("WEEKLY REPORT // " + start.toDateString().slice(4, 10).toUpperCase() + " - " + new Date(end - 864e5).toDateString().slice(4, 10).toUpperCase(),
+        lines, "weekly report received.", 18000);
+    }).catch(function (e) { console.log("crypt: weekly " + e); if (byHand) command("trakt unreachable.", true); });
+  }
+  // friends: the people you follow on Trakt. What they start, and what they are watching right now.
+  function friends(byHand) {
+    if (!tkCfg() || !tkGet()) { if (byHand) command("trakt not linked.", true); return; }
+    if (!byHand && (gone() || root.classList.contains("saver"))) return;
+    var told = tkGet("crypt.friends.told"), first = !told;
+    told = told || {};
+    tkFresh().then(function () { return tkJSON("/users/me/following"); }).then(function (fl) {
+      fl = (fl || []).slice(0, 8);
+      tkPut(fl.map(function (f) { return f.user.username; }), "crypt.friends");
+      return Promise.all(fl.map(function (f) {
+        var u = f.user, slug = u.ids.slug, name = (u.name || u.username).split(" ")[0];
+        return Promise.all([
+          tkJSON("/users/" + slug + "/watching").catch(function () { return null; }),
+          tkJSON("/users/" + slug + "/history?limit=10").catch(function () { return []; })
+        ]).then(function (r) { return { name: name, now: r[0], hist: r[1] || [] }; });
+      }));
+    }).then(function (all) {
+      var news = [];
+      all.forEach(function (f) {
+        var n = f.name.toUpperCase();
+        if (f.now) {
+          var it = f.now.show || f.now.movie, k = "w" + n + (f.now.episode ? f.now.episode.ids.trakt : it.ids.trakt);
+          if (!told[k]) { told[k] = Date.now(); news.push(n + " is watching " + it.title + (f.now.episode ? " " + tkSE(f.now.episode) : "") + " right now"); }
+        }
+        f.hist.forEach(function (h) {
+          var k = "h" + h.id;
+          if (told[k]) return;
+          told[k] = Date.now();
+          if (Date.now() - Date.parse(h.watched_at) > 2 * 864e5) return;
+          if (h.episode && h.episode.number === 1) news.push(n + " just started " + h.show.title + " season " + h.episode.season);
+          else if (h.movie) news.push(n + " watched " + h.movie.title);
+        });
+      });
+      Object.keys(told).forEach(function (k) { if (Date.now() - told[k] > 30 * 864e5) delete told[k]; });
+      tkPut(told, "crypt.friends.told");
+      if (first && !byHand) return;   // the first look only learns what is already there
+      if (!news.length) { if (byHand) command(all.length ? "no news from your crew." : "you aren't following anyone on trakt.", true); return; }
+      tellPanel("CREW CHATTER // TRAKT", news.slice(0, 5).concat(news.length > 5 ? ["... and " + (news.length - 5) + " more"] : []),
+        news[0].toLowerCase() + ".", 15000);
+    }).catch(function (e) { console.log("crypt: friends " + e); if (byHand) command("trakt unreachable.", true); });
+  }
+  function moreStart() {
+    if (!tkCfg()) return;
+    setTimeout(premieres, 40e3); setInterval(premieres, 12 * 3600e3);
+    setTimeout(friends, 70e3); setInterval(friends, 30 * 60e3);
+    setInterval(function () { var d = new Date(); if (d.getDay() === 1 && d.getHours() >= 6) weekly(false); }, 10 * 60e3);
+    setTimeout(function () { var d = new Date(); if (d.getDay() === 1 && d.getHours() >= 6) weekly(false); }, 150e3);
+  }
+
+  // ================= bedtime: Sunday to Thursday at 11pm =================
+  function bedtime() {
+    var d = new Date(), key = d.toDateString();
+    if (d.getDay() > 4 || d.getHours() !== 23 || gone() || root.classList.contains("saver")) return;
+    try { if (localStorage.getItem("crypt.bed") === key) return; localStorage.setItem("crypt.bed", key); } catch (x) {}
+    tellPanel("INCOMING TRANSMISSION // OPERATOR", ["it's late, " + who().toLowerCase() + ".", "the matrix will still be here tomorrow.", "", "unplug and get some sleep."],
+      "it's late, " + who().toLowerCase() + ".", 16000);
+  }
+
+  // ================= the shutdown timer: the TV turns itself off after hours without a button press =================
+  // apply.py sets the TV's own "turn off after inactivity" (home.shutdown_hours, 3 by default). Here we
+  // only count it down: from the last button press on the home, and while the screensaver runs.
+  var shutEl = null;
+  function shutHours() { var h = ((window.COUCH_CONFIG || {}).home || {}).shutdown_hours; return h === 0 ? 0 : h || 3; }
+  function activeNow() { try { localStorage.setItem("crypt.active", String(Date.now())); } catch (x) {} }
+  function shutTick() {
+    var h = shutHours();
+    if (!h || gone()) return;
+    if (!shutEl) { shutEl = el("div", "crypt-shut"); document.body.appendChild(shutEl); }
+    var last = 0; try { last = +localStorage.getItem("crypt.active") || 0; } catch (x) {}
+    var left = Math.max(0, last + h * 3600e3 - Date.now()), s = Math.floor(left / 1000);
+    shutEl.textContent = "AUTO SHUTDOWN " + Math.floor(s / 3600) + ":" + ("0" + (Math.floor(s / 60) % 60)).slice(-2) + ":" + ("0" + s % 60).slice(-2);
+    shutEl.classList.toggle("near", left < 15 * 60e3);
+  }
+
+  // ================= trivia: one question a day, with a streak =================
+  var TRIVIA = [
+    ["which pill does neo take?", ["red", "blue", "green", "both"], 0],
+    ["what is neo's real name?", ["thomas a. anderson", "thomas a. smith", "john anderson", "thomas neo"], 0],
+    ["what is the name of morpheus's ship?", ["nebuchadnezzar", "logos", "osiris", "hammer"], 0],
+    ["who betrays the crew?", ["cypher", "mouse", "switch", "apoc"], 0],
+    ["what does the oracle offer neo?", ["a cookie", "a spoon", "tea", "a pill"], 0],
+    ["what is the last human city called?", ["zion", "eden", "sion", "babylon"], 0],
+    ["agent smith compares humans to a ...", ["virus", "machine", "parasite", "storm"], 0],
+    ["what company does neo work for?", ["metacortex", "cyberdyne", "tyrell", "aperture"], 0],
+    ["who plays morpheus?", ["laurence fishburne", "samuel l. jackson", "keanu reeves", "hugo weaving"], 0],
+    ["who plays agent smith?", ["hugo weaving", "joe pantoliano", "laurence fishburne", "carrie-anne moss"], 0],
+    ["what year was the matrix released?", ["1999", "1997", "2001", "1998"], 0],
+    ["the spoon boy says there is no ...", ["spoon", "fork", "matrix", "choice"], 0],
+    ["what is neo's apartment number?", ["101", "303", "1999", "42"], 0],
+    ["what is the first fighting style neo learns?", ["jujitsu", "kung fu", "karate", "drunken boxing"], 0],
+    ["who is the operator of the nebuchadnezzar?", ["tank", "dozer", "mouse", "link"], 0],
+    ["tank's brother is ...", ["dozer", "apoc", "switch", "cypher"], 0],
+    ["deja vu is usually a ...", ["glitch in the matrix", "dream", "memory", "sentinel"], 0],
+    ["what does cypher eat with agent smith?", ["steak", "noodles", "a cookie", "chicken"], 0],
+    ["what disables the machines near the ship?", ["the emp", "a virus", "the oracle", "a hardline"], 0],
+    ["who wrote and directed the matrix?", ["the wachowskis", "james cameron", "ridley scott", "zack snyder"], 0],
+    ["what makes the classic matrix phone?", ["nokia", "motorola", "sony", "ericsson"], 0],
+    ["how do they get out of the matrix?", ["a ringing phone", "a red pill", "a door", "sleep"], 0],
+    ["trinity is in room ... at the start", ["303", "101", "707", "1999"], 0],
+    ["who designed the woman in the red dress?", ["mouse", "tank", "apoc", "switch"], 0],
+    ["which book is the white rabbit from?", ["alice in wonderland", "the odyssey", "the wizard of oz", "peter pan"], 0],
+    ["what does agent smith call neo?", ["mr. anderson", "the one", "thomas", "neo"], 0],
+    ["who does cypher shoot first?", ["dozer", "tank", "trinity", "morpheus"], 0],
+    ["what is the dojo program's final move from neo?", ["a jump over morpheus", "a spinning kick", "a headbutt", "a throw"], 0]
+  ];
+  function triviaToday() {
+    var d = new Date(), n = Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 864e5) + d.getFullYear() * 7;
+    var q = TRIVIA[n % TRIVIA.length], order = [0, 1, 2, 3], seed = n;
+    order.sort(function (a, b) { return ((a * 7 + seed) % 5) - ((b * 7 + seed) % 5); });   // the answers in a different order each day
+    return { q: q[0], opts: order.map(function (i) { return q[1][i]; }), right: order.indexOf(q[2]) };
+  }
+  function triviaState() { var s = tkGet("crypt.trivia") || {}; s.streak = s.streak || 0; return s; }
+  function triviaAnswer(i) {
+    var t = triviaToday(), s = triviaState(), today = new Date().toDateString(), y = new Date(Date.now() - 864e5).toDateString();
+    if (s.day === today) return;
+    var ok = i === t.right;
+    s.streak = ok ? (s.last === y && s.lastOk ? s.streak + 1 : 1) : 0;
+    s.day = today; s.last = today; s.lastOk = ok; s.pick = i;
+    s.best = Math.max(s.best || 0, s.streak);
+    tkPut(s, "crypt.trivia");
+    command(ok ? "correct. streak " + s.streak + "." : "wrong. it was " + t.opts[t.right] + ".", true);
+  }
+
+  // ================= hacker mode: every press pours out more code =================
+  var hackEl = null, hackN = 0;
+  var HACK = ["ssh -l root 10.2.2.2", "nmap -v -sS -O 10.2.2.2", "sshnuke 10.2.2.2 -rootpw=\"Z1ON0101\"", "connecting to 10.2.2.2:ssh ... successful.",
+    "attempting to exploit SSHv1 CRC32 ... successful.", "resetting root password to \"Z1ON0101\".", "system open: access level <9>",
+    "decrypt --key=NEB3 /zion/mainframe.db", "inject trace_0x" , "spoof hardline 555-0690 ... ok", "override sentinel_grid --sector 12",
+    "for (i = 0; i < 0xFFFF; i++) reroute(node[i]);", "chmod 777 /construct/loading.prg", "cat /dev/matrix | grep -i \"the one\"",
+    "upload kungfu.prg --target neo", "while (agent.near()) { dodge(); }", "mount /dev/zion /mnt/real", "kill -9 $(pidof agent_smith)"];
+  function hackOpen() {
+    if (!hackEl) { hackEl = el("div", "crypt-hack"); document.body.appendChild(hackEl); }
+    hackN = 0;
+    hackEl.innerHTML = '<div class="hbar">HACKER MODE // PRESS ANY BUTTON TO TYPE &nbsp; BACK TO EXIT</div><pre class="hbody"></pre>';
+    hackEl.classList.add("on");
+    command("hacker mode engaged.", true);
+  }
+  function hackKey(k) {
+    if (/^(Escape|Backspace|GoBack|BrowserBack)$/.test(k)) { hackEl.classList.remove("on"); command(hackN >= 40 ? "you're in." : "connection closed.", true); return; }
+    var body = hackEl.querySelector(".hbody"), line = HACK[(Math.random() * HACK.length) | 0].replace("trace_0x", "trace_0x" + hex(8));
+    hackN++;
+    body.textContent += (body.textContent ? "\n" : "") + "root@neb3:~# " + line;
+    if (hackN % 6 === 0) body.textContent += "\n" + Array.apply(null, Array(4)).map(function () { return hex(8) + " " + hex(8) + " " + hex(8) + " " + hex(8); }).join("\n");
+    if (hackN === 40) {
+      body.textContent += "\n\n*** ACCESS GRANTED ***";
+      gFlash(); root.classList.add("crypt-glitch"); setTimeout(function () { root.classList.remove("crypt-glitch"); }, 300);
+    }
+    var lines = body.textContent.split("\n"); if (lines.length > 22) body.textContent = lines.slice(-22).join("\n");
+    click();
+  }
+  function hackOn() { return hackEl && hackEl.classList.contains("on"); }
+
+  // ================= smart home: the doorbell, the aircon, jack in =================
+  // The doorbell rings: the launcher (Doorbell.kt) shows the door picture, and the home gets an alert
+  function doorbell() {
+    if (gone()) return;
+    var a = el("div", "crypt-agent crypt-door", "!! INTRUSION DETECTED !!<small>FRONT DOOR ... HARDLINE " + hex(4) + "-" + hex(4) + "</small>");
+    document.body.appendChild(a);
+    root.classList.add("crypt-glitch");
+    gColour([255, 40, 40], true);
+    setTimeout(function () { gColour(base(), true); root.classList.remove("crypt-glitch"); }, 300);
+    logPush("!! DOORBELL ... SOMEONE AT THE DOOR");
+    setTimeout(function () { a.remove(); }, 2300);
+    cmdHold = Date.now() + 9000;
+    command("someone is at the door.", true);
+  }
+  var climate = [];
+  function climateLoad() {
+    var sh = window.smartHome;
+    if (!sh || !sh.ask || !sh.available || !sh.available() || gone()) return;
+    sh.ask("climate").then(function (r) { if (r && r.ok && Array.isArray(r.rooms)) climate = r.rooms.filter(function (x) { return x.ok; }); });
+  }
+  function jackIn(out) {
+    var h = (window.COUCH_CONFIG || {}).home || {}, ent = out ? h.jack_out : h.jack_in, sh = window.smartHome;
+    if (!ent || !sh || !sh.ask) return command("no hardline to home assistant.", true);
+    command(out ? "jacking out ..." : "jacking in ...", true);
+    if (!out) { burstUntil = Date.now() + 1500; gFlash(); }
+    sh.ask("scene", ent).then(function (r) {
+      cmdHold = Date.now() + 6000;
+      command(r && r.ok ? (out ? "unplugged. lights restored." : "you're in. lights down.") : "the hardline didn't answer.", true);
+    });
+  }
+
   // ---------- network chatter: two faint log panes beside the clock ----------
   // Made-up traffic for the look: home addresses (this TV's own, from config.json, when it has one),
   // and the documentation-only ranges 192.0.2.x, 198.51.100.x and 203.0.113.x for the far end, so
@@ -2578,7 +2890,10 @@
       setTimeout(function () { it.classList.remove("crypt-go"); setEdge(tint, false); }, 900);
     }, true);
     startLogs();
-    traktStart();
+    traktStart(); moreStart();
+    setInterval(bedtime, 30e3);
+    activeNow(); setInterval(shutTick, 1000);
+    setTimeout(climateLoad, 8e3); setInterval(climateLoad, 2 * 60e3);
     setTimeout(quote, 60e3);
     setTimeout(wxWarn, 45e3); setInterval(wxWarn, 30 * 60e3);   // the forecast, every half hour
     if (slick) startSlick();
@@ -2596,7 +2911,7 @@
   }
 
   window.crypt = {
-    start: start, weather: function (w) { weather(w); }, trakt: function (l) { tkShow(l); }, spell: function (t) { spell(t); },
+    start: start, weather: function (w) { weather(w); }, trakt: function (l) { tkShow(l); }, doorbell: function () { doorbell(); }, spell: function (t) { spell(t); },
     // for the screensaver
     edgePulse: function (c, ms) { setEdge(c, true); setTimeout(function () { setEdge(tint, false); }, ms || 160); },
     // shortcuts for a demo or the console: start an event now
