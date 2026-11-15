@@ -173,6 +173,14 @@ to undo it, is in [docs/COUCH-TV.md](docs/COUCH-TV.md). The short version:
 Moments, the fights in the screensaver and the scenery behind them can each be switched on or off
 in `config.json`. Everything can be undone ([docs/UNINSTALL.md](docs/UNINSTALL.md)).
 
+## New episode notices (Trakt)
+
+The Construct can tell you on the TV when a new episode of a show you watch has aired. It does this with [Trakt](https://trakt.tv): you link your own Trakt account once by entering a code at trakt.tv/activate.
+
+It only reads your shows, watch progress, watchlist and calendar. It never changes anything on your Trakt account, and your data stays on your TV. See the [privacy policy](PRIVACY.md).
+
+> Show and episode data is provided by [Trakt](https://trakt.tv). The Construct uses the Trakt API but is not endorsed or certified by Trakt.
+
 ## Credits
 
 - Built on [couch-tv](https://github.com/Seagey/couch-tv) by Seagey and its contributors (their
