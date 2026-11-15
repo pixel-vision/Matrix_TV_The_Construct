@@ -1972,6 +1972,8 @@
   // back, the ship and the raw feed in the window) and opens the console: programs (the fight
   // scenes, on demand), events on cue, hardline training, and messages for the first person.
   // OK on the Operator button opens it again; Back closes it.
+  var conLog = [], conDetail = null, conBackAt = 0;
+  function conEsc(t) { return String(t).replace(/[&<>]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]; }); }
   var conEl = null, conAt = 0, conItems = [], conOpen = {}, conMode = "main", progEl = null, progNow = null;
   var PROGRAMS = [["FREEZE KICK", 0, "freeze"], ["COMBAT TRAINING", 1, "dojo"], ["THE JUMP", 2, "rooftop"], ["BULLET TIME", 3, "bullet"],
     ["THE CHALLENGE", 4, "beckon"], ["STOP", 5, "stop"]];   // in the order the film has them
@@ -2020,13 +2022,42 @@
       }
       items.push(["h", "MISSION LOG"]);
       var ml = [], day = function (t) { var d = new Date(t); return ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"][d.getDay()] + " " + ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2); };
-      try { JSON.parse(localStorage.getItem("crypt.watched") || "[]").forEach(function (x) { ml.push([x.at, day(x.at) + "  " + x.a + ".EXE  " + hm(x.m) + (x.w ? "  " + String(x.w).toUpperCase() : "")]); }); } catch (x) {}
-      (tkGet("crypt.trakt.hist") || []).forEach(function (x) { ml.push([x.at, day(x.at) + "  " + x.t.slice(0, 24) + " " + x.e]); });
+      try { JSON.parse(localStorage.getItem("crypt.watched") || "[]").forEach(function (x) { ml.push([x.at, day(x.at) + "  " + x.a + ".EXE  " + hm(x.m) + (x.w ? "  " + String(x.w).toUpperCase() : ""), { app: x }]); }); } catch (x) {}
+      (tkGet("crypt.trakt.hist") || []).forEach(function (x, i) { ml.push([x.at, day(x.at) + "  " + x.t.slice(0, 24) + " " + x.e, { ep: x, i: i }]); });
       ml.sort(function (a, b) { return b[0] - a[0]; });
       if (!ml.length) items.push(["n", "nothing logged yet."]);
-      ml.slice(0, 14).forEach(function (x) { items.push(["n", x[1]]); });
+      conLog = ml.slice(0, 14);
+      conLog.forEach(function (x, i) { items.push(["log", conEsc(x[1]), i]); });
       items.push(["h", "MESSAGES"]);
       items.push(["msgs", "leave a message for " + who().toLowerCase() + " ..."]);
+    } else if (conMode === "ep") {   // one line of the mission log, opened
+      var d = conDetail || {}, wrap = function (t, w) {
+        var out = [], line = "";
+        String(t || "").split(/\s+/).forEach(function (wd) {
+          if (line && (line + " " + wd).length > w) { out.push(line); line = wd; } else line = line ? line + " " + wd : wd;
+        });
+        if (line) out.push(line);
+        return out;
+      };
+      var when = function (t) { var x = new Date(t); return x.toDateString().toUpperCase() + " " + ("0" + x.getHours()).slice(-2) + ":" + ("0" + x.getMinutes()).slice(-2); };
+      if (d.ep) {
+        var x = d.ep;
+        items.push(["h", "LOG ENTRY // " + x.t.toUpperCase().slice(0, 30)]);
+        items.push(["n", x.e + (x.et ? "  \"" + x.et + "\"" : "")]);
+        items.push(["n", "watched " + when(x.at).toLowerCase()]);
+        items.push(["n", " "]);
+        if (x.o) wrap(x.o, 52).forEach(function (l) { items.push(["n", l]); });
+        else items.push(["n", d.wait ? "decoding transmission ..." : "no summary on file."]);
+        items.push(["n", " "]);
+        items.push(["n", "via trakt"]);
+      } else if (d.app) {
+        var a = d.app;
+        items.push(["h", "LOG ENTRY // " + a.a + ".EXE"]);
+        [["OPENED", when(a.at)], ["DURATION", hm(a.m)], ["OPERATIVE", String(a.w || "unknown").toUpperCase()], ["EXIT CODE", "0"]].forEach(function (r) {
+          items.push(["n", r[0] + " " + new Array(Math.max(2, 12 - r[0].length)).join(".") + " " + r[1]]);
+        });
+      }
+      items.push(["back", "< back"]);
     } else if (conMode === "help") {
       items.push(["h", "THE RED EVENTS"]);
       ["1. WAKE UP. the construct wakes up: the screen is taken over,",
@@ -2092,7 +2123,7 @@
     if (k === "ArrowDown") { conAt = sel[Math.min(sel.length - 1, at + 1)]; click(); return consoleBuild(); }
     if (k === "ArrowUp") { conAt = sel[Math.max(0, at - 1)]; click(); return consoleBuild(); }
     if (k === "Escape" || k === "Backspace" || k === "GoBack" || k === "BrowserBack") {
-      if (conMode !== "main") { conMode = "main"; conAt = 0; return consoleBuild(); }
+      if (conMode !== "main") { conAt = conMode === "ep" ? conBackAt : 0; conMode = "main"; return consoleBuild(); }
       return consoleClose();
     }
     if (k !== "Enter" && k !== " ") return;
@@ -2100,7 +2131,8 @@
     if (it[0] === "h") { conOpen[it[1]] = !conOpen[it[1]]; click(); return consoleBuild(); }   // the heading stays picked
     if (it[0] === "msgs") { conMode = "msgs"; conAt = 0; return consoleBuild(); }
     if (it[0] === "help") { conMode = "help"; conAt = 0; return consoleBuild(); }
-    if (it[0] === "back") { conMode = "main"; conAt = 0; return consoleBuild(); }
+    if (it[0] === "back") { conAt = conMode === "ep" ? conBackAt : 0; conMode = "main"; return consoleBuild(); }
+    if (it[0] === "log") { conDetail = conLog[it[2]][2]; conBackAt = conAt; conMode = "ep"; conAt = 0; click(); consoleBuild(); return logSummary(conDetail); }
     if (it[0] === "msg") {
       try { localStorage.setItem("crypt.msg", MESSAGES[it[2]]); } catch (x) {}
       command("message queued for " + who().toLowerCase(), true);
@@ -2282,7 +2314,9 @@
       var seen = {}, told = tkGet("crypt.trakt.told") || {}, now = Date.now(), fresh = [];
       res[1].forEach(function (h) { if (h.episode && h.episode.ids) seen[h.episode.ids.trakt] = 1; });
       tkPut(res[1].slice(0, 15).filter(function (h) { return h.show && h.episode; }).map(function (h) {
-        return { at: Date.parse(h.watched_at), t: h.show.title, e: tkSE(h.episode) };
+        var old = (tkGet("crypt.trakt.hist") || []).filter(function (o) { return o.id === h.episode.ids.trakt && o.o; })[0];
+        return { at: Date.parse(h.watched_at), t: h.show.title, e: tkSE(h.episode), id: h.episode.ids.trakt,
+                 sid: h.show.ids.trakt, s: h.episode.season, n: h.episode.number, et: h.episode.title || "", o: old ? old.o : "" };
       }), "crypt.trakt.hist");
       res[0].forEach(function (c) {
         var id = c.episode && c.episode.ids && c.episode.ids.trakt;
@@ -2334,6 +2368,21 @@
       if (!tag) { tag = el("span", "crypt-next"); var ep = t.querySelector("i"); (ep || t).appendChild(tag); }
       if (tag.textContent !== "NEXT " + hit.e) tag.textContent = "NEXT " + hit.e;
     });
+  }
+  // the mission log: the episode's summary from Trakt, kept with the log line once fetched
+  function logSummary(d) {
+    var x = d && d.ep;
+    if (!x || x.o || !x.sid || !tkCfg()) return;
+    d.wait = true;
+    tkReq("/shows/" + x.sid + "/seasons/" + x.s + "/episodes/" + x.n + "?extended=full", null, true)
+      .then(function (r) { if (!r.ok) throw "trakt " + r.status; return r.json(); })
+      .then(function (j) {
+        x.o = (j.overview || "").slice(0, 600); if (j.title) x.et = j.title;
+        var h = tkGet("crypt.trakt.hist") || [];
+        h.forEach(function (o) { if (o.id === x.id) { o.o = x.o; o.et = x.et; } });
+        tkPut(h, "crypt.trakt.hist");
+      }).catch(function (e) { console.log("crypt: trakt summary " + e); })
+      .then(function () { d.wait = false; if (conMode === "ep" && conDetail === d && consoleIsOpen()) consoleBuild(); });
   }
   function tkEp(c) {
     var e = c.episode;
