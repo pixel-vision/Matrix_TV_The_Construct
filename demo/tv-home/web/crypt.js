@@ -2728,20 +2728,38 @@
     "upload kungfu.prg --target neo", "while (agent.near()) { dodge(); }", "mount /dev/zion /mnt/real", "kill -9 $(pidof agent_smith)"];
   function hackOpen() {
     if (!hackEl) { hackEl = el("div", "crypt-hack"); document.body.appendChild(hackEl); }
-    hackN = 0;
-    hackEl.innerHTML = '<div class="hbar">HACKER MODE // PRESS ANY BUTTON TO TYPE &nbsp; BACK TO EXIT</div><pre class="hbody"></pre>';
+    hackN = 0; hackDone = false;
+    clearTimeout(hackIdle); hackIdle = setTimeout(function () { hackClose("connection timed out."); }, 45000);
+    hackEl.innerHTML = '<div class="hbar">HACKER MODE // PRESS ANY BUTTON TO BREAK IN &nbsp; BACK TO EXIT</div><pre class="hbody"></pre>';
     hackEl.classList.add("on");
     command("hacker mode engaged.", true);
   }
+  var hackIdle = null, hackDone = false;
+  function hackClose(msg) {
+    clearTimeout(hackIdle);
+    if (!hackOn()) return;
+    hackEl.classList.remove("on");
+    cmdHold = Date.now() + 6000;
+    command(msg, true);
+    wakeHome();
+  }
   function hackKey(k) {
-    if (/^(Escape|Backspace|GoBack|BrowserBack)$/.test(k)) { hackEl.classList.remove("on"); command(hackN >= 40 ? "you're in." : "connection closed.", true); return; }
+    if (/^(Escape|Backspace|GoBack|BrowserBack)$/.test(k)) return hackClose(hackDone ? "you're in." : "connection closed.");
+    if (hackDone) return;   // access granted: it closes by itself
+    clearTimeout(hackIdle);
+    hackIdle = setTimeout(function () { hackClose("connection timed out."); }, 45000);   // left alone: back to the home
     var body = hackEl.querySelector(".hbody"), line = HACK[(Math.random() * HACK.length) | 0].replace("trace_0x", "trace_0x" + hex(8));
     hackN++;
+    var bar = hackEl.querySelector(".hbar");
+    if (bar) bar.innerHTML = "HACKER MODE // BREAKING IN " + Math.min(100, Math.round(hackN / 40 * 100)) + "% &nbsp; BACK TO EXIT";
     body.textContent += (body.textContent ? "\n" : "") + "root@neb3:~# " + line;
     if (hackN % 6 === 0) body.textContent += "\n" + Array.apply(null, Array(4)).map(function () { return hex(8) + " " + hex(8) + " " + hex(8) + " " + hex(8); }).join("\n");
     if (hackN === 40) {
-      body.textContent += "\n\n*** ACCESS GRANTED ***";
+      hackDone = true;
+      body.textContent += "\n\n*** ACCESS GRANTED ***\n\nwelcome to the real world.";
       gFlash(); root.classList.add("crypt-glitch"); setTimeout(function () { root.classList.remove("crypt-glitch"); }, 300);
+      clearTimeout(hackIdle);
+      setTimeout(function () { hackClose("you're in."); }, 3500);   // then back to the home
     }
     var lines = body.textContent.split("\n"); if (lines.length > 22) body.textContent = lines.slice(-22).join("\n");
     click();
