@@ -258,6 +258,11 @@ def _home(h):
     mo = [m for m in mo if m in ("vase", "bricks", "code", "phone", "sentinels", "agentface", "reddress", "rabbit", "cat")]
     if mo:
         out["crypt_moments"] = mo
+    # Trakt new episode notices (README): only the app's Client ID, which is not a secret
+    tk = h.get("trakt") if isinstance(h.get("trakt"), dict) else {}
+    cid = str(tk.get("client_id") or "").strip()
+    if re.fullmatch(r"[A-Za-z0-9_-]{16,128}", cid):
+        out["trakt"] = {"client_id": cid}
     # the household's favourite apps, by the start of their name, first on the dock in this order
     first = h.get("first_apps") if isinstance(h.get("first_apps"), list) else []
     first = [n.strip()[:40] for n in first if isinstance(n, str) and n.strip()][:10]
