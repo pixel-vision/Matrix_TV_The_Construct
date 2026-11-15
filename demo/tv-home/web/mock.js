@@ -86,6 +86,18 @@
   if (arg("first")) cfg.home.first_apps = arg("first").split(",");
   if (arg("tiles")) cfg.home.input_tiles = arg("tiles").split(",").map(function (x) { var p = x.split(":"); return { name: p[0], input: p[1] || p[0], first: p[2] === "first" }; });
   if (arg("moments")) cfg.home.crypt_moments = arg("moments").split(",");   // the Crypt look's random moments
+  // the demo: a linked Trakt account with sample data, so Up next and the mission log show
+  cfg.home.trakt = { client_id: "demo-only-no-real-account" };
+  try {
+    if (!localStorage.getItem("crypt.trakt")) {
+      var now = Date.now();
+      localStorage.setItem("crypt.trakt", JSON.stringify({ access_token: "demo", refresh_token: "demo", expires: 9e15 }));
+      localStorage.setItem("crypt.trakt.next", JSON.stringify([{ t: "Slow Horses", e: "S04E04", n: "" }, { t: "Colin from Accounts", e: "S02E07", n: "" },
+        { t: "Severance", e: "S02E08", n: "" }, { t: "The Bear", e: "S03E05", n: "" }]));
+      localStorage.setItem("crypt.trakt.hist", JSON.stringify([{ at: now - 26 * 3600e3, t: "Slow Horses", e: "S04E03" }, { at: now - 50 * 3600e3, t: "Severance", e: "S02E07" }]));
+      localStorage.setItem("crypt.watched", JSON.stringify([{ a: "NETFLIX", at: now - 5 * 3600e3, m: 74, w: "Neo" }, { a: "BINGE", at: now - 28 * 3600e3, m: 41, w: "Neo" }]));
+    }
+  } catch (x) {}
   window.COUCH_CONFIG = cfg;
 
   // ---------- the launcher's updater (Updater.kt), for ?update= ----------

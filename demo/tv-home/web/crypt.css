@@ -151,7 +151,6 @@ html.theme-crypt .app.lifted .face { animation: wiggle 0.32s ease-in-out infinit
 html.theme-crypt .app .dot { border-radius: 0; background: var(--c-green); box-shadow: var(--c-glow); }
 
 
-
 /* the screensaver (saver.html): no network chatter, only the rain and the drifting window */
 html.saver .crypt-log { display: none; }
 
@@ -225,7 +224,6 @@ html.crypt-slick.crypt-idle .crypt-log { opacity: 0.42; }
 html.crypt-slick.crypt-logshow .crypt-log { opacity: 0.9; }   /* the session report, after an app */
 
 
-
 /* the command line under the readout: what the remote is on, typed as a command */
 .crypt-cmd {
   position: fixed; left: 36rem; top: 33.5rem; width: 50rem; pointer-events: none; white-space: pre; overflow: hidden;
@@ -262,7 +260,6 @@ html.crypt-red.crypt-slick .app:not(.focus) .face img { filter: grayscale(1) sep
 html.crypt-red .crypt-crt { background:
   repeating-linear-gradient(180deg, rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0) 0.125rem, rgba(0, 0, 0, 0.28) 0.125rem, rgba(0, 0, 0, 0.28) 0.25rem),
   radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 55%, rgba(40, 0, 0, 0.6) 100%); }
-
 
 
 /* (preview) ASCII Keep watching: the progress as [██████░░░░] 61%, the picture sweeps in when chosen */
@@ -562,8 +559,12 @@ html.crypt-mirror .time { color: #e6eef6; text-shadow: 0 0 0.6rem rgba(220, 235,
   50% { transform: skewX(-3deg) scaleX(1.04); filter: blur(0.5px) contrast(1.3); } 75% { transform: skewY(2deg) scaleY(0.97); filter: blur(1.5px); } }
 .crypt-chrome { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 40; pointer-events: none; }
 /* with "reduce motion" on, the glass still ripples (it is the moment), just slower and gentler */
-
 /* the EMP is armed and waiting for OK: the last line blinks */
 .crypt-alarm .ao.ask { border-color: rgba(255, 120, 130, 0.9); }
 .crypt-alarm .ao.ask::after { content: "_"; animation: crypt-askblink 0.8s steps(2) infinite; }
 @keyframes crypt-askblink { 50% { opacity: 0; } }
+
+/* Trakt: the next episode on a Keep watching card */
+.crypt-next { display: inline-block; margin-left: 1.25rem; font-size: 1.375rem; letter-spacing: 0.14em; color: #00ff41; opacity: 0.85; text-shadow: 0 0 0.5rem rgba(0, 255, 65, 0.5); }
+html.crypt-red .crypt-next { color: #ff2a2a; text-shadow: 0 0 0.5rem rgba(255, 42, 42, 0.5); }
+.crypt-console .ch.cs { opacity: 1; }
