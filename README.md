@@ -1,7 +1,8 @@
 # Matrix TV Home Screen: The Construct
 
 **Your TV's home screen, turned into the Matrix.** Code rain, a 90s terminal clock, random events
-you answer with the remote, a hidden passcode, and a screensaver that replays the film's fights.
+you answer with the remote, a hidden passcode, a screensaver that replays the film's fights, and
+transmissions when a new episode of your show is out.
 
 <p align="center">
   <a href="docs/matrix/the-construct-trailer.mp4"><img src="docs/matrix/trailer-teaser.gif" width="280" alt="The Construct: trailer"></a><br>
@@ -48,8 +49,19 @@ into the final battle with Agent Smith. It is a customised build of
 - **A screensaver that plays the films.** When the TV is idle, the rain spells out the time, then
   plays one of six fights from *The Matrix*, in the order they come in the film, with sets drawn
   behind them. Wake it mid-fight and the command line answers with a line from that scene.
+- **New episodes, straight from [Trakt](#new-episode-notices-trakt).** Link your Trakt account and
+  a new episode of a show you watch arrives as an incoming transmission. Keep watching cards get a
+  NEXT tag, new seasons are counted down, and every Monday there's a report of your week.
+- **The Oracle and your crew.** Ask the Oracle and she picks something from your watchlist. When
+  someone you follow on Trakt starts a new season, you hear about it.
+- **Transmissions from the operator.** Film quotes on the command line, warnings when rain, a
+  storm, heat or strong wind is coming, and a nudge to get to bed at 11pm on a school night.
+- **A shutdown timer.** The TV turns itself off after 3 hours without a button press, counted
+  down on the home and the screensaver.
 - **An operator console.** Pick the **Operator** profile and you get a console to run any fight,
-  set off any event, play the finale, or leave a message for the other profile.
+  set off any event, play the finale, or leave a message for the other profile. It also has the
+  mission log (open an episode for its summary), a daily trivia question with a streak, hacker
+  mode, and **jack in** to drop your Govee lights to a low green for a movie.
 - **The Last Stand.** The final fight between Neo and Smith from the end of the trilogy, written
   as a playable scene: you trade blows, charge the sky clashes and let Smith in at the end.
 
