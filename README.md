@@ -177,6 +177,8 @@ in `config.json`. Everything can be undone ([docs/UNINSTALL.md](docs/UNINSTALL.m
 
 The Construct can tell you on the TV when a new episode of a show you watch has aired. It does this with [Trakt](https://trakt.tv): you link your own Trakt account once by entering a code at trakt.tv/activate.
 
+To switch it on, make your own free app at [trakt.tv/oauth/applications](https://trakt.tv/oauth/applications) (sign-in type: device code), put its Client ID in `config.json` as `"home": { "trakt": { "client_id": "..." } }`, update the TV, then open the **operator console** and choose **link trakt account**. A new episode turns up as an incoming transmission in the clock window, once per episode, and the console can check by hand or unlink.
+
 It only reads your shows, watch progress, watchlist and calendar. It never changes anything on your Trakt account, and your data stays on your TV. See the [privacy policy](PRIVACY.md).
 
 > Show and episode data is provided by [Trakt](https://trakt.tv). The Construct uses the Trakt API but is not endorsed or certified by Trakt.

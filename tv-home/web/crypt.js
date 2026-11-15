@@ -1994,6 +1994,11 @@
       items.push(["h", "TRAINING"]);
       var best = 0; try { best = +localStorage.getItem("crypt.hlbest") || 0; } catch (x) {}
       items.push(["train", "hardline training" + (best ? "   record " + best.toFixed(1) + "s" : "")]);
+      if (tkCfg()) {
+        items.push(["h", "TRAKT"]);
+        if (tkGet()) { items.push(["tk", "check for new episodes", "check"]); items.push(["tk", "unlink trakt", "unlink"]); }
+        else items.push(["tk", "link trakt account ...", "link"]);
+      }
       items.push(["h", "MESSAGES"]);
       items.push(["msgs", "leave a message for " + who().toLowerCase() + " ..."]);
     } else if (conMode === "help") {
@@ -2069,6 +2074,7 @@
     if (it[0] === "prog") return loadProgram(it[2]);
     if (it[0] === "fin") return loadFinal(it[2]);
     if (it[0] === "mo") return setTimeout(function () { tryMoment(it[2], 6); }, 500);
+    if (it[0] === "tk") return setTimeout(function () { it[2] === "link" ? traktLink() : it[2] === "unlink" ? traktUnlink() : traktCheck(true); }, 400);
     if (it[0] === "train") { lastKeyAt = Date.now(); return setTimeout(function () { hardlineRun(true); }, 400); }
     var e = it[2];
     setTimeout(function () {
@@ -2142,6 +2148,138 @@
       if (k < m.length) setTimeout(type, 45);
     })();
     setTimeout(function () { if (panelLock === "msg") { panelLock = null; panelSet("time"); command("transmission ends", true); } }, 15000);
+  }
+
+  // ---------- trakt: a transmission when a new episode of one of your shows has aired ----------
+  // Off unless config.json has home.trakt.client_id. The TV links itself to the viewer's own Trakt
+  // account with a device code (trakt.tv/activate), from the operator console. Read only: it asks for
+  // the calendar of your shows and your recent history, and keeps the sign-in on this TV alone.
+  var TK = "https://api.trakt.tv", tkPoll = null, tkBusy = false;
+  function tkCfg() { var h = (window.COUCH_CONFIG || {}).home || {}; return h.trakt && h.trakt.client_id ? h.trakt : null; }
+  function tkGet(k) { try { return JSON.parse(localStorage.getItem(k || "crypt.trakt") || "null"); } catch (x) { return null; } }
+  function tkPut(v, k) { try { if (v) localStorage.setItem(k || "crypt.trakt", JSON.stringify(v)); else localStorage.removeItem(k || "crypt.trakt"); } catch (x) {} }
+  function tkReq(path, body, auth) {
+    var c = tkCfg(), t = tkGet(), h = { "Content-Type": "application/json", "trakt-api-version": "2", "trakt-api-key": c.client_id };
+    if (auth && t) h.Authorization = "Bearer " + t.access_token;
+    return fetch(TK + path, { method: body ? "POST" : "GET", headers: h, body: body ? JSON.stringify(body) : undefined });
+  }
+  function tkSave(j) {
+    tkPut({ access_token: j.access_token, refresh_token: j.refresh_token,
+            expires: ((j.created_at || Date.now() / 1000) + (j.expires_in || 86400)) * 1000 });
+  }
+  function tkFresh() {   // a good token, refreshed when it is near its end
+    var t = tkGet(), c = tkCfg();
+    if (!t) return Promise.reject("unlinked");
+    if (t.expires > Date.now() + 3600e3) return Promise.resolve(t);
+    var b = { refresh_token: t.refresh_token, client_id: c.client_id, grant_type: "refresh_token", redirect_uri: "urn:ietf:wg:oauth:2.0:oob" };
+    if (c.client_secret) b.client_secret = c.client_secret;
+    return tkReq("/oauth/token", b).then(function (r) {
+      if (r.status === 401 || r.status === 400) { tkPut(null); throw "unlinked"; }
+      if (!r.ok) throw "trakt " + r.status;
+      return r.json().then(function (j) { tkSave(j); return tkGet(); });
+    });
+  }
+  function tkPanel(head, lines) {
+    if (!panelEl) { panelEl = el("div", "crypt-panel"); document.body.appendChild(panelEl); }
+    panelLock = "trakt";
+    root.classList.add("crypt-p1");
+    panelEl.innerHTML = '<div class="phead">&gt; ' + head + '</div><div class="psys pmsg"></div>';
+    panelEl.querySelector(".pmsg").innerHTML = lines.map(function (l) {
+      return String(l).replace(/[&<>]/g, function (ch) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[ch]; });
+    }).join("<br>");
+  }
+  function tkPanelEnd() { if (panelLock === "trakt") { panelLock = null; panelSet("time"); } }
+  function traktLink() {
+    var c = tkCfg();
+    if (!c || tkPoll) return;
+    command("open hardline trakt.tv ...", true);
+    tkReq("/oauth/device/code", { client_id: c.client_id }).then(function (r) {
+      if (!r.ok) throw "trakt " + r.status;
+      return r.json();
+    }).then(function (d) {
+      var url = (d.verification_url || "https://trakt.tv/activate").replace(/^https?:\/\//, ""), end = Date.now() + d.expires_in * 1000;
+      tkPanel("HARDLINE REQUEST // TRAKT", ["on your phone go to", url, "", "enter code   " + d.user_code, "", "waiting for the operator ..."]);
+      cmdHold = Date.now() + 20000;
+      command("enter " + d.user_code + " at " + url, true);
+      var every = (d.interval || 5) * 1000;
+      (function poll() {
+        if (Date.now() > end) { tkPoll = null; tkPanelEnd(); return command("hardline lost. code expired.", true); }
+        var b = { code: d.device_code, client_id: c.client_id };
+        if (c.client_secret) b.client_secret = c.client_secret;
+        tkReq("/oauth/device/token", b).then(function (r) {
+          if (r.status === 200) return r.json().then(function (j) {
+            tkSave(j); tkPoll = null; tkPanelEnd();
+            cmdHold = Date.now() + 8000;
+            command("trakt linked. i'll watch your shows.", true);
+            logPush("TRAKT LINK ESTABLISHED");
+            setTimeout(traktCheck, 4000);
+          });
+          if (r.status === 429) every += 1000;
+          if (r.status === 400 || r.status === 429) { tkPoll = setTimeout(poll, every); return; }
+          tkPoll = null; tkPanelEnd();
+          command(r.status === 418 ? "link refused." : r.status === 410 ? "hardline lost. code expired." : "trakt link failed (" + r.status + ")", true);
+        }, function () { tkPoll = setTimeout(poll, every * 2); });
+      })();
+    }).catch(function (e) { console.log("crypt: trakt " + e); command("trakt unreachable.", true); });
+  }
+  function traktUnlink() {
+    var t = tkGet(), c = tkCfg();
+    if (t && c) tkReq("/oauth/revoke", { token: t.access_token, client_id: c.client_id }).catch(function () {});
+    tkPut(null); tkPut(null, "crypt.trakt.told");
+    command("trakt unlinked.", true);
+  }
+  function tkDay(d) { return d.toISOString().slice(0, 10); }
+  // new episodes from the last 7 days of your shows' calendar that you have not watched and have not been told about
+  function traktCheck(byHand) {
+    if (!tkCfg() || tkBusy) return;
+    if (!tkGet()) { if (byHand) command("trakt not linked.", true); return; }
+    if (!byHand && (gone() || panelLock || root.classList.contains("saver"))) return setTimeout(traktCheck, 5 * 60e3);
+    tkBusy = true;
+    var since = new Date(Date.now() - 7 * 864e5);
+    tkFresh().then(function () {
+      return Promise.all([
+        tkReq("/calendars/my/shows/" + tkDay(since) + "/8", null, true).then(function (r) { if (!r.ok) throw "trakt " + r.status; return r.json(); }),
+        tkReq("/sync/history/episodes?start_at=" + since.toISOString() + "&limit=200", null, true).then(function (r) { return r.ok ? r.json() : []; }, function () { return []; })
+      ]);
+    }).then(function (res) {
+      var seen = {}, told = tkGet("crypt.trakt.told") || {}, now = Date.now(), fresh = [];
+      res[1].forEach(function (h) { if (h.episode && h.episode.ids) seen[h.episode.ids.trakt] = 1; });
+      res[0].forEach(function (c) {
+        var id = c.episode && c.episode.ids && c.episode.ids.trakt;
+        if (!id || seen[id] || told[id] || Date.parse(c.first_aired) > now) return;
+        fresh.push(c); told[id] = now;
+      });
+      Object.keys(told).forEach(function (k) { if (now - told[k] > 30 * 864e5) delete told[k]; });   // forget after a month
+      tkPut(told, "crypt.trakt.told");
+      tkBusy = false;
+      if (!fresh.length) { if (byHand) command("no new episodes. the matrix is quiet.", true); return; }
+      tkShow(fresh);
+    }).catch(function (e) {
+      tkBusy = false;
+      console.log("crypt: trakt " + e);
+      if (byHand) command(e === "unlinked" ? "trakt not linked." : "trakt unreachable.", true);
+    });
+  }
+  function tkEp(c) {
+    var e = c.episode;
+    return c.show.title + "  S" + ("0" + e.season).slice(-2) + "E" + ("0" + e.number).slice(-2) + (e.title ? '  "' + e.title + '"' : "");
+  }
+  function tkShow(list) {
+    if (panelLock) return setTimeout(function () { tkShow(list); }, 60e3);   // something else has the clock window
+    var lines = list.slice(0, 5).map(function (c) { return "NEW  " + tkEp(c); });
+    if (list.length > 5) lines.push("... and " + (list.length - 5) + " more");
+    lines.push("", "via trakt");
+    tkPanel("INCOMING TRANSMISSION // NEW EPISODE" + (list.length > 1 ? "S" : ""), lines);
+    cmdHold = Date.now() + 16000;
+    command(list.length > 1 ? list.length + " new episodes are waiting." : "new episode: " + list[0].show.title.toLowerCase(), true);
+    logPush("TRANSMISSION RECEIVED ... TRAKT");
+    setEdge(tint, true); setTimeout(function () { setEdge(tint, false); }, 400);
+    setTimeout(tkPanelEnd, 15000);
+  }
+  function traktStart() {
+    if (!tkCfg()) return;
+    setTimeout(traktCheck, 90e3);
+    setInterval(traktCheck, 6 * 3600e3);   // a look every six hours; each episode is told once
   }
 
   // ---------- network chatter: two faint log panes beside the clock ----------
@@ -2255,6 +2393,7 @@
       setTimeout(function () { it.classList.remove("crypt-go"); setEdge(tint, false); }, 900);
     }, true);
     startLogs();
+    traktStart();
     if (slick) startSlick();
     setInterval(track, 120);
     // for the TV's log (adb logcat): the page must be exactly as wide as the screen
@@ -2270,7 +2409,7 @@
   }
 
   window.crypt = {
-    start: start, weather: function (w) { weather(w); }, spell: function (t) { spell(t); },
+    start: start, weather: function (w) { weather(w); }, trakt: function (l) { tkShow(l); }, spell: function (t) { spell(t); },
     // for the screensaver
     edgePulse: function (c, ms) { setEdge(c, true); setTimeout(function () { setEdge(tint, false); }, ms || 160); },
     // shortcuts for a demo or the console: start an event now
