@@ -486,6 +486,11 @@
       log.apps[key] = (log.apps[key] || 0) + Math.max(1, mins);
       localStorage.setItem("crypt.log", JSON.stringify(log));
     } catch (x) {}
+    try {   // the mission log in the operator console: the last 20 sessions
+      var ml = JSON.parse(localStorage.getItem("crypt.watched") || "[]");
+      ml.unshift({ a: slug(s.name).toUpperCase(), at: s.at, m: Math.max(1, mins), w: who() });
+      localStorage.setItem("crypt.watched", JSON.stringify(ml.slice(0, 20)));
+    } catch (x) {}
     var after = Math.max(1300, bootUntil - Date.now() + 500);   // once the boot lines have cleared
     cmdHold = Date.now() + after + 8000;
     setTimeout(function () { command(line, true); }, after);
@@ -1054,6 +1059,14 @@
         row("SENTINELS", (near >= 10 ? '<i class="pbad">' : "") + near + " IN RANGE" + (near >= 10 ? " !!</i>" : ""))];
       return '<div class="phead">&gt; SHIP STATUS // OPERATOR ONLINE</div><pre class="psys">' + rows.join("\n") + "</pre>";
     }
+    if (which === "next") {
+      var nx = (tkGet("crypt.trakt.next") || []).slice(0, 6);
+      var w = Math.min(22, Math.max.apply(null, nx.map(function (x) { return x.t.length; }).concat([4])));
+      return '<div class="phead">&gt; UP NEXT // TRAKT</div><pre class="psys">' + nx.map(function (x) {
+        var t = x.t.length > w ? x.t.slice(0, w - 1) + "~" : x.t;
+        return "  " + esc(t) + " " + new Array(w - t.length + 4).join(".") + " " + x.e;
+      }).join("\n") + "</pre>";
+    }
     if (which === "feed") {
       var lines = [];
       for (var f = 0; f < 6; f++) { var ln = ""; for (var g = 0; g < 26; g++) ln += pick(); lines.push(ln); }
@@ -1079,7 +1092,8 @@
       if (panelLock || gone()) return;                         // the trace has the window; or nobody is looking
       if (redPill) { panelAt = 0; panelSet("time"); return; }  // red: the clock stays
       panelAt++;
-      var t = opMode ? ["time", "ship", "feed"] : turn;          // the operator: the ship and the raw feed
+      var t = opMode ? ["time", "ship", "feed"] : turn.slice();   // the operator: the ship and the raw feed
+      if (tkCfg() && (tkGet("crypt.trakt.next") || []).length) t.push("next");   // your shows' next episodes
       panelSet(t[panelAt % t.length]);
     }, /[?&]panels=fast/.test(location.search) ? 3000 : 20000);
   }
@@ -1958,7 +1972,7 @@
   // back, the ship and the raw feed in the window) and opens the console: programs (the fight
   // scenes, on demand), events on cue, hardline training, and messages for the first person.
   // OK on the Operator button opens it again; Back closes it.
-  var conEl = null, conAt = 0, conItems = [], conMode = "main", progEl = null, progNow = null;
+  var conEl = null, conAt = 0, conItems = [], conOpen = {}, conMode = "main", progEl = null, progNow = null;
   var PROGRAMS = [["FREEZE KICK", 0, "freeze"], ["COMBAT TRAINING", 1, "dojo"], ["THE JUMP", 2, "rooftop"], ["BULLET TIME", 3, "bullet"],
     ["THE CHALLENGE", 4, "beckon"], ["STOP", 5, "stop"]];   // in the order the film has them
   var MESSAGES = ["the phones are being traced. stay off the main lines.", "watch for deja vu. it means they changed something.",
@@ -1999,6 +2013,18 @@
         if (tkGet()) { items.push(["tk", "check for new episodes", "check"]); items.push(["tk", "unlink trakt", "unlink"]); }
         else items.push(["tk", "link trakt account ...", "link"]);
       }
+      var tkn = tkGet("crypt.trakt.next") || [];
+      if (tkn.length) {
+        items.push(["h", "UP NEXT"]);
+        tkn.forEach(function (x) { items.push(["n", x.t.slice(0, 26) + "  " + x.e]); });
+      }
+      items.push(["h", "MISSION LOG"]);
+      var ml = [], day = function (t) { var d = new Date(t); return ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"][d.getDay()] + " " + ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2); };
+      try { JSON.parse(localStorage.getItem("crypt.watched") || "[]").forEach(function (x) { ml.push([x.at, day(x.at) + "  " + x.a + ".EXE  " + hm(x.m) + (x.w ? "  " + String(x.w).toUpperCase() : "")]); }); } catch (x) {}
+      (tkGet("crypt.trakt.hist") || []).forEach(function (x) { ml.push([x.at, day(x.at) + "  " + x.t.slice(0, 24) + " " + x.e]); });
+      ml.sort(function (a, b) { return b[0] - a[0]; });
+      if (!ml.length) items.push(["n", "nothing logged yet."]);
+      ml.slice(0, 14).forEach(function (x) { items.push(["n", x[1]]); });
       items.push(["h", "MESSAGES"]);
       items.push(["msgs", "leave a message for " + who().toLowerCase() + " ..."]);
     } else if (conMode === "help") {
@@ -2020,11 +2046,20 @@
       MESSAGES.forEach(function (m, i) { items.push(["msg", m, i]); });
       items.push(["back", "< back"]);
     }
+    if (conMode === "main") {   // each heading opens and closes; only the open ones show what is under them
+      var cur = "", kept = [];
+      items.forEach(function (it) {
+        if (it[0] === "h") { cur = it[1]; kept.push(["h", it[1], cur]); return; }
+        if (conOpen[cur]) kept.push(it);
+      });
+      items = kept;
+    }
     conItems = items;
-    var sel = items.map(function (it, i) { return it[0] === "h" || it[0] === "n" ? -1 : i; }).filter(function (i) { return i >= 0; });
+    var sel = items.map(function (it, i) { return (it[0] === "h" && conMode !== "main") || it[0] === "n" ? -1 : i; }).filter(function (i) { return i >= 0; });
     if (sel.indexOf(conAt) < 0) conAt = sel[0];
     var body = items.map(function (it, i) {
-      return it[0] === "h" ? conLine("// " + it[1], "ch") : it[0] === "n" ? conLine(it[1].replace(/ /g, "&nbsp;"), "cn") : conLine((i === conAt ? "&gt; " : "&nbsp; ") + it[1], i === conAt ? "cs" : "");
+      if (it[0] === "h" && conMode === "main") return conLine((i === conAt ? "&gt; " : "&nbsp; ") + (conOpen[it[1]] ? "[-] " : "[+] ") + it[1], "ch" + (i === conAt ? " cs" : ""));
+      return it[0] === "h" ? conLine("// " + it[1], "ch") : it[0] === "n" ? conLine(String(it[1]).replace(/[&<>]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]; }).replace(/ /g, "&nbsp;").replace(/^/, conMode === "main" ? "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" : ""), "cn") : conLine((i === conAt ? "&gt; " : "&nbsp; ") + it[1], i === conAt ? "cs" : "");
     }).join("");
     conEl.innerHTML = '<div class="cbar">OPERATOR CONSOLE // NEB-III</div><div class="cwrap"><div class="cbody">' + body +
       '</div><div class="ctrack"><div class="cthumb"></div></div></div><div class="cfoot">↑↓ choose &nbsp; OK run &nbsp; BACK close</div>';
@@ -2052,7 +2087,7 @@
   function consoleClose() { if (conEl) conEl.classList.remove("on"); }
   function consoleIsOpen() { return conEl && conEl.classList.contains("on"); }
   function consoleKey(k) {
-    var sel = conItems.map(function (it, i) { return it[0] === "h" || it[0] === "n" ? -1 : i; }).filter(function (i) { return i >= 0; });
+    var sel = conItems.map(function (it, i) { return (it[0] === "h" && conMode !== "main") || it[0] === "n" ? -1 : i; }).filter(function (i) { return i >= 0; });
     var at = sel.indexOf(conAt);
     if (k === "ArrowDown") { conAt = sel[Math.min(sel.length - 1, at + 1)]; click(); return consoleBuild(); }
     if (k === "ArrowUp") { conAt = sel[Math.max(0, at - 1)]; click(); return consoleBuild(); }
@@ -2062,6 +2097,7 @@
     }
     if (k !== "Enter" && k !== " ") return;
     var it = conItems[conAt];
+    if (it[0] === "h") { conOpen[it[1]] = !conOpen[it[1]]; click(); return consoleBuild(); }   // the heading stays picked
     if (it[0] === "msgs") { conMode = "msgs"; conAt = 0; return consoleBuild(); }
     if (it[0] === "help") { conMode = "help"; conAt = 0; return consoleBuild(); }
     if (it[0] === "back") { conMode = "main"; conAt = 0; return consoleBuild(); }
@@ -2212,7 +2248,7 @@
             cmdHold = Date.now() + 8000;
             command("trakt linked. i'll watch your shows.", true);
             logPush("TRAKT LINK ESTABLISHED");
-            setTimeout(traktCheck, 4000);
+            setTimeout(traktCheck, 4000); setTimeout(traktNext, 8000);
           });
           if (r.status === 429) every += 1000;
           if (r.status === 400 || r.status === 429) { tkPoll = setTimeout(poll, every); return; }
@@ -2225,7 +2261,8 @@
   function traktUnlink() {
     var t = tkGet(), c = tkCfg();
     if (t && c) tkReq("/oauth/revoke", { token: t.access_token, client_id: c.client_id }).catch(function () {});
-    tkPut(null); tkPut(null, "crypt.trakt.told");
+    tkPut(null); tkPut(null, "crypt.trakt.told"); tkPut(null, "crypt.trakt.next"); tkPut(null, "crypt.trakt.hist");
+    Array.prototype.forEach.call(document.querySelectorAll(".crypt-next"), function (n) { n.remove(); });
     command("trakt unlinked.", true);
   }
   function tkDay(d) { return d.toISOString().slice(0, 10); }
@@ -2244,6 +2281,9 @@
     }).then(function (res) {
       var seen = {}, told = tkGet("crypt.trakt.told") || {}, now = Date.now(), fresh = [];
       res[1].forEach(function (h) { if (h.episode && h.episode.ids) seen[h.episode.ids.trakt] = 1; });
+      tkPut(res[1].slice(0, 15).filter(function (h) { return h.show && h.episode; }).map(function (h) {
+        return { at: Date.parse(h.watched_at), t: h.show.title, e: tkSE(h.episode) };
+      }), "crypt.trakt.hist");
       res[0].forEach(function (c) {
         var id = c.episode && c.episode.ids && c.episode.ids.trakt;
         if (!id || seen[id] || told[id] || Date.parse(c.first_aired) > now) return;
@@ -2258,6 +2298,41 @@
       tkBusy = false;
       console.log("crypt: trakt " + e);
       if (byHand) command(e === "unlinked" ? "trakt not linked." : "trakt unreachable.", true);
+    });
+  }
+  function tkSE(e) { return "S" + ("0" + e.season).slice(-2) + "E" + ("0" + e.number).slice(-2); }
+  // up next: the next unwatched, aired episode of the 6 shows watched most recently
+  function traktNext() {
+    if (!tkCfg() || !tkGet()) return;
+    tkFresh().then(function () {
+      return tkReq("/sync/watched/shows?extended=noseasons", null, true).then(function (r) { if (!r.ok) throw "trakt " + r.status; return r.json(); });
+    }).then(function (shows) {
+      shows.sort(function (a, b) { return Date.parse(b.last_watched_at) - Date.parse(a.last_watched_at); });
+      return Promise.all(shows.slice(0, 6).map(function (w) {
+        return tkReq("/shows/" + w.show.ids.trakt + "/progress/watched?specials=false", null, true).then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (p) {
+            var n = p && p.next_episode;
+            if (!n || (n.first_aired && Date.parse(n.first_aired) > Date.now())) return null;
+            return { t: w.show.title, e: tkSE(n), n: n.title || "" };
+          }, function () { return null; });
+      }));
+    }).then(function (list) {
+      tkPut(list.filter(Boolean), "crypt.trakt.next");
+      nextTags();
+    }).catch(function (e) { console.log("crypt: trakt next " + e); });
+  }
+  // the Keep watching cards: a NEXT tag on a show Trakt knows the next episode of
+  function nextTags() {
+    var nx = tkGet("crypt.trakt.next") || [];
+    if (!nx.length) return;
+    var norm = function (t) { return String(t || "").toLowerCase().replace(/[^a-z0-9]/g, ""); };
+    Array.prototype.forEach.call(document.querySelectorAll(".ncard"), function (c) {
+      var b = c.querySelector("b"), t = c.querySelector(".t");
+      if (!b || !t) return;
+      var hit = nx.filter(function (x) { return norm(x.t) === norm(b.textContent); })[0], tag = c.querySelector(".crypt-next");
+      if (!hit) { if (tag) tag.remove(); return; }
+      if (!tag) { tag = el("span", "crypt-next"); var ep = t.querySelector("i"); (ep || t).appendChild(tag); }
+      if (tag.textContent !== "NEXT " + hit.e) tag.textContent = "NEXT " + hit.e;
     });
   }
   function tkEp(c) {
@@ -2280,6 +2355,67 @@
     if (!tkCfg()) return;
     setTimeout(traktCheck, 90e3);
     setInterval(traktCheck, 6 * 3600e3);   // a look every six hours; each episode is told once
+    setTimeout(traktNext, 20e3);
+    setInterval(function () { if (!gone()) traktNext(); }, 3600e3);
+    setInterval(function () { if (!gone()) nextTags(); }, 3000);   // the cards are redrawn now and then
+  }
+
+  // ---------- weather warnings: a transmission when rain, a storm, heat or wind is on its way ----------
+  // Open-Meteo's hourly forecast for the place in config.json (free, no key). Each kind of warning is
+  // told at most once every 6 hours.
+  function wxWarn() {
+    var c = (window.COUCH_CONFIG || {}).weather;
+    if (!c || !isFinite(c.lat) || gone() || root.classList.contains("saver")) return;
+    var url = "https://api.open-meteo.com/v1/forecast?latitude=" + c.lat + "&longitude=" + c.lon +
+      "&hourly=precipitation_probability,weather_code,temperature_2m,wind_gusts_10m&current=weather_code" +
+      "&timezone=" + encodeURIComponent(c.timezone || "auto") + "&forecast_hours=6";
+    fetch(url).then(function (r) { return r.json(); }).then(function (j) {
+      var h = j.hourly || {}, nowCode = j.current ? +j.current.weather_code : 0, out = [];
+      var raining = (nowCode >= 51 && nowCode <= 67) || (nowCode >= 80 && nowCode <= 82) || nowCode >= 95;
+      var when = function (i) { var d = new Date(h.time[i]), hr = d.getHours(); return i === 0 ? "NOW" : (hr % 12 || 12) + (hr < 12 ? "AM" : "PM"); };
+      var first = function (test) { for (var i = 0; i < (h.time || []).length; i++) if (test(i)) return i; return -1; };
+      var st = first(function (i) { return h.weather_code[i] >= 95; });
+      if (st >= 0) out.push(["storm", "STORM CELL INBOUND .... " + when(st)]);
+      var rn = first(function (i) { return h.precipitation_probability[i] >= 60; });
+      if (rn >= 0 && !raining && st < 0) out.push(["rain", "RAIN " + h.precipitation_probability[rn] + "% ............ " + when(rn)]);
+      var ht = first(function (i) { return h.temperature_2m[i] >= 35; });
+      if (ht >= 0) out.push(["heat", "HEAT " + Math.round(h.temperature_2m[ht]) + "°C ............. " + when(ht)]);
+      var wd = first(function (i) { return h.wind_gusts_10m[i] >= 60; });
+      if (wd >= 0) out.push(["wind", "WIND GUSTS " + Math.round(h.wind_gusts_10m[wd]) + " KM/H ..... " + when(wd)]);
+      var told = tkGet("crypt.wx.told") || {}, now = Date.now();
+      out = out.filter(function (w) { return !(told[w[0]] > now - 6 * 3600e3); });
+      if (!out.length) return;
+      out.forEach(function (w) { told[w[0]] = now; });
+      tkPut(told, "crypt.wx.told");
+      wxShow(out);
+    }).catch(function () {});
+  }
+  function wxShow(out) {
+    if (panelLock) return setTimeout(function () { wxShow(out); }, 60e3);
+    tkPanel("INCOMING TRANSMISSION // WEATHER", out.map(function (w) { return w[1]; }).concat(["", "the operator advises staying plugged in."]));
+    cmdHold = Date.now() + 14000;
+    command("weather warning: " + out[0][0] + " incoming.", true);
+    logPush("TRANSMISSION RECEIVED ... WEATHER");
+    setTimeout(tkPanelEnd, 14000);
+  }
+
+  // ---------- quotes: a line from the films on the command line every few minutes ----------
+  var QUOTES = ["there is no spoon.", "free your mind.", "welcome to the real world.", "follow the white rabbit.",
+    "the matrix has you ...", "knock, knock, neo.", "what is real?", "i know kung fu.", "dodge this.",
+    "ignorance is bliss.", "he's beginning to believe.", "guns. lots of guns.", "you're the one, neo.",
+    "do not try and bend the spoon.", "remember, all i'm offering is the truth.", "never send a human to do a machine's job.",
+    "deja vu is usually a glitch in the matrix.", "there's a difference between knowing the path and walking the path.",
+    "fate, it seems, is not without a sense of irony.", "everything that has a beginning has an end.",
+    "choice is an illusion.", "hope. it is the quintessential human delusion.", "i'm trying to free your mind, neo.",
+    "you have to let it all go, neo. fear, doubt, and disbelief.", "the answer is out there, neo.", "wake up, neo ..."];
+  var quoteBag = [];
+  function quote() {
+    setTimeout(quote, (90 + Math.random() * 90) * 1000);   // every one and a half to three minutes
+    if (gone() || broken || swallow || panelLock || root.classList.contains("saver") || root.classList.contains("crypt-idle")) return;
+    if (Date.now() < cmdHold || Date.now() - lastKeyAt < 15000) return;   // someone is moving round the home
+    if (!quoteBag.length) quoteBag = QUOTES.slice().sort(function () { return Math.random() - 0.5; });
+    command(quoteBag.pop(), true);
+    cmdHold = Date.now() + 9000;
   }
 
   // ---------- network chatter: two faint log panes beside the clock ----------
@@ -2394,6 +2530,8 @@
     }, true);
     startLogs();
     traktStart();
+    setTimeout(quote, 60e3);
+    setTimeout(wxWarn, 45e3); setInterval(wxWarn, 30 * 60e3);   // the forecast, every half hour
     if (slick) startSlick();
     setInterval(track, 120);
     // for the TV's log (adb logcat): the page must be exactly as wide as the screen
